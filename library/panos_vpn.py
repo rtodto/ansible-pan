@@ -115,7 +115,10 @@ def wait_with_timeout(module, shell, prompt, timeout=60):
                 break
 
         if time.time()-now > timeout:
-            module.fail_json(msg="Timeout waiting for prompt")
+            if module:
+                module.fail_json(msg="Timeout waiting for prompt")
+            else:
+                print("Timeout waiting for prompt")
 
     return result
 
@@ -204,12 +207,20 @@ def main():
     module.exit_json(changed=True, msg="okey dokey")
 '''
 
+def maintest():
+    fname = '../samples/vpn-7891766d.txt'
+    with open(fname) as f:
+        for line in f:
+            print line
+
+
 def main():
     # mocker
     key_filename = None
     username = 'admin'
     password = 'paloalto'
     ip_address = 'fw.local'
+    module = None
     # end mocker
 
     stdout = ""
@@ -239,4 +250,4 @@ def main():
     stdout += buff
 
 if __name__ == '__main__':
-    main()
+    maintest()
