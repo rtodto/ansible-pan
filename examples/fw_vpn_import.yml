@@ -1,0 +1,23 @@
+- name: Load already imported configuration
+  hosts: my-firewall
+  connection: local
+  gather_facts: False
+
+#  roles:
+#    - role: PaloAltoNetworks.paloaltonetworks
+
+  vars:
+    vpn_config: "~/SourceCode/ansible-pan/samples/vpn-7891766d.txt"
+
+  tasks:
+  - name: Grab the credentials from ansible-vault
+    include_vars: 'firewall-secrets.yml'
+    no_log: 'yes'
+
+  - name: import AWS generated VPN configuration into firewall
+    panos_vpn_import:
+      ip_address: "{{ ip_address }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      vpn_config: "{{ vpn_config }}"
+      config_type: "aws"
