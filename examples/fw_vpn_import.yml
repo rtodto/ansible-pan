@@ -21,3 +21,7 @@
       password: "{{ password }}"
       vpn_config: "{{ vpn_config }}"
       config_type: "aws"
+    register: result
+
+  - name: Returned output
+    debug: msg='{{ result.stdout }}'

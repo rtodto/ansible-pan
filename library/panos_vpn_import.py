@@ -66,8 +66,12 @@ EXAMPLES = '''
     config_type: "aws"
 '''
 
-RETURN='''
-# Default return values
+RETURN = '''
+stdout:
+    description: output of the CLI responses on the firewall
+    returned: success
+    type: string
+    sample: "N/A"
 '''
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
@@ -174,7 +178,7 @@ def main():
         exc = get_exception()
         module.fail_json(msg=exc.message)
 
-    module.exit_json(changed=True, msg=stdout)
+    module.exit_json(changed=True, msg='Done.', stdout=stdout)
 
 
 if __name__ == '__main__':
