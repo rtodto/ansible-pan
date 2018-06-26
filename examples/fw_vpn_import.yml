@@ -7,7 +7,7 @@
 #    - role: PaloAltoNetworks.paloaltonetworks
 
   vars:
-    vpn_config: "~/SourceCode/ansible-pan/samples/vpn-7891766d.txt"
+    vpn_config: "/Users/ibojer/SourceCode/ansible-pan/samples/vpn-7891766d.txt"
 
   tasks:
   - name: Grab the credentials from ansible-vault
