@@ -168,6 +168,8 @@ def main():
 
         shell = client.invoke_shell()
         stdout = commitAWSVpnConfig(shell, module, vpn_config)
+    except IOError:
+        module.fail_json(msg='Cannot find VPN configuration file!')
     except Exception:
         exc = get_exception()
         module.fail_json(msg=exc.message)
