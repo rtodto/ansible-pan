@@ -72,14 +72,13 @@ options:
 
 EXAMPLES = '''
 # Generates a new self-signed certificate using ssh
-- name: generate self signed certificate
-  panos_cert_gen_ssh:
+- name: import AWS generated VPN configuration into firewall
+  panos_vpn_import:
     ip_address: "192.168.1.1"
     username: "admin"
     password: "paloalto"
-    cert_cn: "1.1.1.1"
-    cert_friendly_name: "test123"
-    signed_by: "root-ca"
+    vpn_config: "../samples/vpn-7891766d.txt"
+    type: "aws"
 '''
 
 RETURN='''
@@ -93,9 +92,9 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.basic import get_exception
-import time
 
 try:
+    import time
     import paramiko
     HAS_LIB=True
 except ImportError:
@@ -115,52 +114,31 @@ def wait_with_timeout(module, shell, prompt, timeout=60):
                 break
 
         if time.time()-now > timeout:
-            if module:
-                module.fail_json(msg="Timeout waiting for prompt")
-            else:
-                print("Timeout waiting for prompt")
+            module.fail_json(msg="Timeout waiting for prompt")
 
     return result
 
-'''
-def generate_cert(module, ip_address, username, key_filename, password,
-                  cert_cn, cert_friendly_name, signed_by, rsa_nbits ):
-    stdout = ""
 
-    client = paramiko.SSHClient()
-
-    # add policy to accept all host keys, I haven't found
-    # a way to retrieve the instance SSH key fingerprint from AWS
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-    if not key_filename:
-        client.connect(ip_address, username=username, password=password)
-    else:
-        client.connect(ip_address, username=username, key_filename=key_filename)
-
-    shell = client.invoke_shell()
+def commitAWSVpnConfig(shell, module, vpn_config):
+    stdout = ''
     # wait for the shell to start
     buff = wait_with_timeout(module, shell, ">")
     stdout += buff
 
-    # generate self-signed certificate
-    if isinstance(cert_cn, list):
-        cert_cn = cert_cn[0]
-    cmd = 'request certificate generate signed-by {0} certificate-name {1} name {2} algorithm RSA rsa-nbits {3}\n'.format(
-        signed_by, cert_friendly_name, cert_cn, rsa_nbits)
-    shell.send(cmd)
+    with open(vpn_config) as f:
+        for line in f:
+            line = line.lstrip()
+            if len(line) and not line.startswith(('!', '\n')):
+                line = line.rstrip('\n')
 
-    # wait for the shell to complete
-    buff = wait_with_timeout(module, shell, ">")
-    stdout += buff
+                cmd = '{0}\n'.format(line)
+                # stdin, stdout, stderr = shell.exec_command(cmd)
+                shell.send(cmd)
 
-    # exit
-    shell.send('exit\n')
+                # wait for the shell to complete
+                buff = wait_with_timeout(module, shell, "#")
+                stdout += buff
 
-    if 'Success' not in buff:
-        module.fail_json(msg="Error generating self signed certificate: "+stdout)
-
-    client.close()
     return stdout
 
 
@@ -170,12 +148,10 @@ def main():
         username=dict(default='admin'),
         key_filename=dict(),
         password=dict(no_log=True),
-        cert_cn=dict(required=True),
-        cert_friendly_name=dict(required=True),
-        rsa_nbits=dict(default='2048'),
-        signed_by=dict(required=True)
-
+        vpn_config=dict(required=True),
+        type=dict(type='str', required=True, choices=['aws'])
     )
+
     module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=False,
                            required_one_of=[['key_filename', 'password']])
     if not HAS_LIB:
@@ -185,69 +161,33 @@ def main():
     username = module.params["username"]
     key_filename = module.params["key_filename"]
     password = module.params["password"]
-    cert_cn = module.params["cert_cn"]
-    cert_friendly_name = module.params["cert_friendly_name"]
-    signed_by = module.params["signed_by"]
-    rsa_nbits = module.params["rsa_nbits"]
+    vpn_config = module.params["vpn_config"]
+    type = module.params["type"]
 
+    if type is not 'aws':
+        module.fail_json(msg='We support only AWS VPN configuration at this time')
+
+    stdout = ''
     try:
-        stdout = generate_cert(module,
-                               ip_address,
-                               username,
-                               key_filename,
-                               password,
-                               cert_cn,
-                               cert_friendly_name,
-                               signed_by,
-                               rsa_nbits)
+        client = paramiko.SSHClient()
+
+        # add policy to accept all host keys, I haven't found
+        # a way to retrieve the instance SSH key fingerprint from AWS
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        if not key_filename:
+            client.connect(ip_address, username=username, password=password)
+        else:
+            client.connect(ip_address, username=username, key_filename=key_filename)
+
+        shell = client.invoke_shell()
+        stdout = commitAWSVpnConfig(shell, module, vpn_config)
     except Exception:
         exc = get_exception()
         module.fail_json(msg=exc.message)
 
-    module.exit_json(changed=True, msg="okey dokey")
-'''
+    module.exit_json(changed=True, msg=stdout)
 
-def maintest():
-    fname = '../samples/vpn-7891766d.txt'
-    with open(fname) as f:
-        for line in f:
-            print line
-
-
-def main():
-    # mocker
-    key_filename = None
-    username = 'admin'
-    password = 'paloalto'
-    ip_address = 'fw.local'
-    module = None
-    # end mocker
-
-    stdout = ""
-
-    client = paramiko.SSHClient()
-
-    # add policy to accept all host keys, I haven't found
-    # a way to retrieve the instance SSH key fingerprint from AWS
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-    if not key_filename:
-        client.connect(ip_address, username=username, password=password)
-    else:
-        client.connect(ip_address, username=username, key_filename=key_filename)
-
-    shell = client.invoke_shell()
-    # wait for the shell to start
-    buff = wait_with_timeout(module, shell, ">")
-    stdout += buff
-
-    cmd = 'request certificate generate signed-by {0} certificate-name {1} name {2} algorithm RSA rsa-nbits {3}\n'.format(
-        signed_by, cert_friendly_name, cert_cn, rsa_nbits)
-    shell.send(cmd)
-
-    # wait for the shell to complete
-    buff = wait_with_timeout(module, shell, ">")
-    stdout += buff
 
 if __name__ == '__main__':
-    maintest()
+    main()
